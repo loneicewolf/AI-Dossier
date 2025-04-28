@@ -1,4 +1,4 @@
-#  AI Generated Pictures with their prompts
+# Images generated using OpenAI’s SORA.
 # `AI: SORA`
 
 
