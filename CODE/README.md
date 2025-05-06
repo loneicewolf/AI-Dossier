@@ -1,9 +1,18 @@
 # AI CODE
 
-- [ ] cyclometer - yet to do
-- [ ] zygalski sheets - yet to do
-- [x] 3 Rotor device - Done
+# - [ ] zygalski sheets - yet to do
 
+
+# - [ ] cyclometer - yet to do
+
+- ![image](https://github.com/user-attachments/assets/b29a7f9e-a28c-44e7-8269-f30bd37e127e)
+
+
+
+# - [x] 3 Rotor device - Done
+- 3 rotors ![image](https://github.com/user-attachments/assets/94c925b5-96f5-4495-8500-682e61b24e53)
+
+- ![image](https://github.com/user-attachments/assets/a0dbd37c-4c96-4056-ae7d-a554d716fc7d)
 
 # REFERENCES 
 - (GPT PRO) + MODELS + parameters <- thanks OpenAI!
