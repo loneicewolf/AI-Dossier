@@ -3,10 +3,9 @@
 # - [ ] zygalski sheets - yet to do
 
 
-# - [ ] cyclometer - yet to do
-
+# - [x] cyclometer - Done
 - ![image](https://github.com/user-attachments/assets/b29a7f9e-a28c-44e7-8269-f30bd37e127e)
-
+- ![image](https://github.com/user-attachments/assets/a74640e9-12a7-4b4f-85c9-7e2821245e10)
 
 
 # - [x] 3 Rotor device - Done
