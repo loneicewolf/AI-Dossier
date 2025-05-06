@@ -22,7 +22,8 @@
   - DEEP RESEARCH - https://operator.chatgpt.com
   - SORA for visuals - https://sora.chatgpt.com/explore
   - OPERATOR - https://openai.com/index/introducing-deep-research/
-
+- Wikipedia - e.g  https://en.wikipedia.org/wiki/Cyclometer
+- 
 
 # Acknowledgements
 - I want to publicly thank OpenAI for creating such powerful AI's. It's instrumental to what I do!
