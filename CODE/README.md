@@ -2,7 +2,7 @@
 
 - [ ] cyclometer - yet to do
 - [ ] zygalski sheets - yet to do
-- [ ] 3 Rotor device - Done
+- [x] 3 Rotor device - Done
 
 
 # REFERENCES
