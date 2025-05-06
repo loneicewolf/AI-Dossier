@@ -1,3 +1,8 @@
+# Thanks to:
+# Marian Rejewski
+# GPT Pro 
+# https://en.wikipedia.org/wiki/Marian_Rejewski
+
 from ipywidgets import interact, Dropdown, ToggleButtons
 import string
 
