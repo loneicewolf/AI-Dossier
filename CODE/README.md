@@ -1,6 +1,6 @@
 # AI CODE
 
-# - [ ] zygalski sheets - yet to do
+# - [x] zygalski sheets - yet to do
 
 
 # - [x] cyclometer - Done
