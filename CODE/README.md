@@ -1,6 +1,8 @@
 # AI CODE
 
 # - [x] zygalski sheets - Done 
+![image](https://github.com/user-attachments/assets/4936b8c0-a457-497d-a9ee-246b0b92c6d0)
+
 
 
 # - [x] cyclometer - Done
