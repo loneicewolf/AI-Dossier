@@ -1,0 +1,403 @@
+#!/usr/bin/env python3
+
+import string
+
+# ----------------------------------------------------------------------
+# ENIGMA ROTOR AND MACHINE CLASSES
+# ----------------------------------------------------------------------
+
+class Rotor:
+    def __init__(self, wiring: str, notch: str, ring_setting: str = 'A'):
+        """
+        Represents an Enigma rotor.
+        
+        :param wiring: 26-letter permutation string mapping inputs (A-Z) to outputs when at base position.
+        :param notch: The letter at which this rotor causes the next rotor to step.
+        :param ring_setting: The Ringstellung letter (default 'A' for 0 offset).
+        """
+        self.wiring = wiring
+        self.notch = notch
+        # Convert ring setting to 0-25 offset (A->0, B->1, etc.)
+        self.ring_offset = ord(ring_setting.upper()) - ord('A')
+        
+        # Precompute forward and reverse mappings as lists for speed
+        # forward_map[i] = output index when input is i (0=A,...25=Z) at base position
+        self.forward_map = [ord(c) - ord('A') for c in wiring]
+        
+        # inverse_map for backward pass
+        self.inverse_map = [0]*26
+        for i, out_idx in enumerate(self.forward_map):
+            self.inverse_map[out_idx] = i
+
+    def encipher_forward(self, c_idx: int, rotor_pos: int) -> int:
+        """
+        Encipher a character index (0-25) through this rotor in the forward (right-to-left) direction.
+        
+        :param c_idx: Index of character (0 for A, 25 for Z).
+        :param rotor_pos: Current rotational position (0-25).
+        :return: Transformed index (0-25).
+        """
+        # Adjust for rotor rotation and ring setting
+        shifted_index = (c_idx + rotor_pos - self.ring_offset) % 26
+        mapped_index = self.forward_map[shifted_index]
+        result_index = (mapped_index - rotor_pos + self.ring_offset) % 26
+        return result_index
+
+    def encipher_backward(self, c_idx: int, rotor_pos: int) -> int:
+        """
+        Encipher a character index through this rotor in the backward (left-to-right) direction.
+        
+        :param c_idx: Index of character (0 for A, 25 for Z).
+        :param rotor_pos: Current rotational position (0-25).
+        :return: Transformed index (0-25).
+        """
+        shifted_index = (c_idx + rotor_pos - self.ring_offset) % 26
+        mapped_index = self.inverse_map[shifted_index]
+        result_index = (mapped_index - rotor_pos + self.ring_offset) % 26
+        return result_index
+
+
+class EnigmaMachine:
+    def __init__(self, rotors, reflector_wiring, plugboard_pairs=None):
+        """
+        Initialize Enigma machine with given rotors and reflector.
+        
+        :param rotors: List of Rotor objects [left, middle, right].
+        :param reflector_wiring: 26-letter mapping for the reflector.
+        :param plugboard_pairs: List of 2-letter strings for plugboard swaps (e.g. ['AB','CD'] swaps A<->B, C<->D).
+        """
+        self.rotors = rotors  # [L, M, R]
+        
+        # Create reflector mapping
+        self.reflector_map = {i: (ord(reflector_wiring[i]) - ord('A')) for i in range(26)}
+        
+        # Set up plugboard (identity if no swaps specified)
+        self.plugboard = {i: i for i in range(26)}
+        if plugboard_pairs:
+            for pair in plugboard_pairs:
+                a_idx = ord(pair[0].upper()) - ord('A')
+                b_idx = ord(pair[1].upper()) - ord('A')
+                self.plugboard[a_idx] = b_idx
+                self.plugboard[b_idx] = a_idx
+        
+        # Rotor positions (0-25). We set this via set_positions()
+        self.positions = [0, 0, 0]
+
+    def set_positions(self, letters: str):
+        """
+        Set the rotor positions given a 3-letter string (e.g. 'QSK').
+        """
+        letters = letters.upper()
+        self.positions = [ord(letters[i]) - ord('A') for i in range(3)]
+
+    def step_rotors(self):
+        """
+        Simulate the rotor stepping mechanism (including the double-step).
+        """
+        L, M, R = self.positions  # left, middle, right rotor positions
+        
+        # Identify the notches in each rotor
+        # Convert the notch letter to index (A=0, B=1, ...)
+        # Then consider ring offset
+        notch_L = (ord(self.rotors[0].notch) - ord('A'))
+        notch_M = (ord(self.rotors[1].notch) - ord('A'))
+        notch_R = (ord(self.rotors[2].notch) - ord('A'))
+        
+        # Check the double-step conditions:
+        # If the middle rotor is at its notch, the left rotor steps with it.
+        left_step = ((M + self.rotors[1].ring_offset) % 26 == notch_M)
+        # If the right rotor is at its notch, step the middle rotor
+        mid_step = ((R + self.rotors[2].ring_offset) % 26 == notch_R)
+        
+        # Also step the middle if left_step is triggered
+        mid_step = mid_step or left_step
+        
+        # Now advance the rotors
+        R = (R + 1) % 26  # right rotor always steps
+        if mid_step:
+            M = (M + 1) % 26
+        if left_step:
+            L = (L + 1) % 26
+        
+        self.positions = [L, M, R]
+
+    def encrypt_letter(self, ch: str) -> str:
+        """
+        Encrypt a single letter (one key press).
+        The machine steps the rotors first, then passes the letter through.
+        
+        :param ch: Single character (A-Z).
+        :return: Encrypted character (A-Z).
+        """
+        # Step rotors on key press
+        self.step_rotors()
+        
+        # Pass through plugboard
+        idx = ord(ch.upper()) - ord('A')
+        idx = self.plugboard[idx]
+        
+        # Forward through the rotors (right to left)
+        for i in reversed(range(len(self.rotors))):
+            idx = self.rotors[i].encipher_forward(idx, self.positions[i])
+        
+        # Reflect
+        idx = self.reflector_map[idx]
+        
+        # Backward through the rotors (left to right)
+        for i in range(len(self.rotors)):
+            idx = self.rotors[i].encipher_backward(idx, self.positions[i])
+        
+        # Through plugboard again
+        idx = self.plugboard[idx]
+        
+        return chr(idx + ord('A'))
+
+    def encrypt_message(self, message: str) -> str:
+        """
+        Encrypt an entire message (letters only), 
+        stepping the rotors before each character.
+        
+        :param message: String (A-Z only).
+        :return: Encrypted string (same length).
+        """
+        ciphertext = ""
+        for ch in message:
+            if ch.upper() in string.ascii_uppercase:
+                ciphertext += self.encrypt_letter(ch.upper())
+        return ciphertext
+
+
+# ----------------------------------------------------------------------
+# ZYGALSKI SHEET GENERATION
+# ----------------------------------------------------------------------
+
+def generate_sheet(rotor_order, left_start, female_type="1-4"):
+    """
+    Generate a 26x26 Zygalski sheet for a given rotor configuration and left rotor start.
+    
+    :param rotor_order: list like ['I','II','III'] specifying rotor types from left to right.
+    :param left_start: Letter for left rotor initial position (e.g. 'A', 'B', ...).
+    :param female_type: '1-4', '2-5', or '3-6' indicating which female pattern the sheet is for.
+    :return: 26x26 matrix (list of lists) of booleans. True means hole (a female is possible).
+    """
+    # Enigma I rotors with known wirings (I, II, III). 
+    # Notch is where the rotor steps the next rotor.
+    rotor_mapping = {
+        'I':   ("EKMFLGDQVZNTOWYHXUSPAIBRCJ", 'Q'),
+        'II':  ("AJDKSIRUXBLHWTMCQGZNPYFVOE", 'E'),
+        'III': ("BDFHJLCPRTXVZNYEIWGAKMUSQO", 'V')
+    }
+    
+    left_rotor = Rotor(*rotor_mapping[rotor_order[0]])
+    mid_rotor  = Rotor(*rotor_mapping[rotor_order[1]])
+    right_rotor= Rotor(*rotor_mapping[rotor_order[2]])
+    
+    sheet_matrix = [[False]*26 for _ in range(26)]
+    
+    # Decide how many offset steps to simulate for the female type
+    # If the repeated letter is the 2nd letter of the key => we've advanced 1 step in the machine, etc.
+    offset_steps = 0
+    if female_type == "2-5":
+        offset_steps = 1
+    elif female_type == "3-6":
+        offset_steps = 2
+    
+    # Reflector B
+    REFLECTOR_B = "YRUHQSLDPXNGOKMIEBFZCWVJAT"
+
+    # For each of the 26x26 middle/right rotor positions, see if a female is possible
+    for mid_idx in range(26):
+        for right_idx in range(26):
+            enigma = EnigmaMachine(
+                [left_rotor, mid_rotor, right_rotor],
+                reflector_wiring=REFLECTOR_B
+            )
+            start_pos = left_start.upper() + chr(mid_idx + ord('A')) + chr(right_idx + ord('A'))
+            enigma.set_positions(start_pos)
+            
+            # Apply the offset steps if needed
+            for _ in range(offset_steps):
+                enigma.step_rotors()
+
+            female_possible = False
+
+            # Which plaintext key position is repeated? (1 => first letter, 2 => second, etc.)
+            repeat_pos = int(female_type.split('-')[0])  # '1', '2', or '3'
+
+            # We brute-force all 26^3 possible 3-letter keys 
+            # (in reality, you'd optimize or have a better method).
+            # Once we find one key that yields the female in ciphertext, we can mark hole=True and move on.
+            for a in range(26):
+                if female_possible:
+                    break
+                for b in range(26):
+                    if female_possible:
+                        break
+                    for c in range(26):
+                        if repeat_pos == 1:
+                            key = chr(a+65) + chr(b+65) + chr(c+65)
+                        elif repeat_pos == 2:
+                            key = chr(b+65) + chr(a+65) + chr(c+65)
+                        else:
+                            key = chr(c+65) + chr(b+65) + chr(a+65)
+                        
+                        # Encrypt key twice to simulate the repeated message key scenario
+                        plaintext = key + key  # e.g. "ABCABC"
+                        enigma.set_positions(start_pos)  # reset to initial positions
+                        # step offset again
+                        for _ in range(offset_steps):
+                            enigma.step_rotors()
+                        
+                        ciphertext = enigma.encrypt_message(plaintext)
+
+                        # Check the female pattern in the ciphertext
+                        # female_type == '1-4': ciphertext[0] == ciphertext[3]
+                        # female_type == '2-5': ciphertext[1] == ciphertext[4]
+                        # female_type == '3-6': ciphertext[2] == ciphertext[5]
+                        if female_type == "1-4" and ciphertext[0] == ciphertext[3]:
+                            female_possible = True
+                        elif female_type == "2-5" and ciphertext[1] == ciphertext[4]:
+                            female_possible = True
+                        elif female_type == "3-6" and ciphertext[2] == ciphertext[5]:
+                            female_possible = True
+                        
+                        if female_possible:
+                            break
+            
+            sheet_matrix[mid_idx][right_idx] = female_possible
+    
+    return sheet_matrix
+
+
+def display_sheet(sheet, left_label=''):
+    """
+    Print the 26x26 sheet to console, using 'O' for holes (True) and '.' for no hole (False).
+    
+    :param sheet: 2D list of booleans, 26x26
+    :param left_label: (optional) label to show for which left rotor setting this sheet corresponds to.
+    """
+    letters = string.ascii_uppercase
+    header = "     " + " ".join(letters)
+    print(header)
+    for i, row in enumerate(sheet):
+        line = f"  {letters[i]}  "
+        for hole in row:
+            line += 'O ' if hole else '. '
+        print(line.strip())
+    if left_label:
+        print(f"(Sheet for left rotor {left_label})")
+
+
+def stack_sheets(rotor_order, left_start, intercepts):
+    """
+    Given multiple intercepts (female types), generate each Zygalski sheet and intersect them
+    (i.e., only keep positions that are True in all sheets).
+    
+    :param rotor_order: e.g. ['I','II','III'] 
+    :param left_start: e.g. 'A'
+    :param intercepts: list like ["1-4", "2-5", "3-6"]
+    :return: 26x26 matrix with True where all intercept sheets align.
+    """
+    combined = [[True]*26 for _ in range(26)]
+    for f_type in intercepts:
+        sheet = generate_sheet(rotor_order, left_start, female_type=f_type)
+        for r in range(26):
+            for c in range(26):
+                combined[r][c] = combined[r][c] and sheet[r][c]
+    return combined
+
+
+def find_solutions(rotor_order, intercepts):
+    """
+    Try all 26 possibilities for the left rotor's starting position, stack the sheets for the intercepts,
+    and return any (left, mid, right) positions where holes remain.
+    
+    :param rotor_order: e.g. ['I','II','III']
+    :param intercepts: list of female types (e.g. ["1-4", "2-5"]).
+    :return: list of (L, M, R) strings representing solutions.
+    """
+    solutions = []
+    letters = string.ascii_uppercase
+    for left_letter in letters:
+        stacked = stack_sheets(rotor_order, left_letter, intercepts)
+        for mid_idx in range(26):
+            for right_idx in range(26):
+                if stacked[mid_idx][right_idx]:
+                    solutions.append((left_letter, letters[mid_idx], letters[right_idx]))
+    return solutions
+
+
+# ----------------------------------------------------------------------
+# DEMO FUNCTIONS
+# ----------------------------------------------------------------------
+
+def demo_educational():
+    """
+    A simpler demonstration (still using real logic, but with a fixed scenario).
+    """
+    print("Running simplified educational demo...")
+    rotor_order = ['I', 'II', 'III']
+    # We'll pick an example daily key and pretend we have 3 intercepts (1-4, 2-5, 3-6).
+    intercepts = ["1-4", "2-5", "3-6"]
+    
+    print(f"Assuming rotor order {rotor_order} and unknown daily key, we received intercepts {intercepts}.")
+    print("We will stack the corresponding Zygalski sheets and look for a unique overlap.")
+    
+    # Find solutions by stacking
+    solutions = find_solutions(rotor_order, intercepts)
+    if solutions:
+        print("Overlap found! Possible rotor settings (Left, Mid, Right):")
+        for sol in solutions:
+            print("   ", sol)
+        print("(In a real scenario, we would test these or refine further. Ideally only one remains.)")
+    else:
+        print("No solution found. Possibly inconsistent intercept data.")
+    
+    # For demonstration, we show one sheet's output
+    example_left = solutions[0][0] if solutions else 'Q'  # pick the first solution's left rotor or default 'Q'
+    sheet_1_4 = generate_sheet(rotor_order, example_left, female_type="1-4")
+    print(f"\nExample Zygalski sheet for left rotor {example_left} with female 1-4:")
+    display_sheet(sheet_1_4, left_label=example_left)
+    print("\nAbove: 'O' indicates positions that could produce a 1-4 female. " 
+          "Stacking with other female-type sheets narrows down to the correct setting.")
+
+
+def demo_historical():
+    """
+    Historically accurate approach (uses real rotor wiring, same as educational, 
+    but you could expand by prompting for plugboard or different rotor choices).
+    """
+    print("Running historically accurate demo...")
+    rotor_order = ['I', 'II', 'III']
+    intercepts = ["1-4", "2-5", "3-6"]
+    print(f"Using rotor order: {rotor_order}")
+    print(f"Intercept female types: {intercepts}")
+    solutions = find_solutions(rotor_order, intercepts)
+    
+    if solutions:
+        print("Possible rotor settings (Left, Mid, Right) satisfying all intercepts:")
+        for sol in solutions:
+            print("   ", sol)
+    else:
+        print("No solution found (either insufficient or contradictory intercepts).")
+
+
+# ----------------------------------------------------------------------
+# MAIN PROGRAM
+# ----------------------------------------------------------------------
+
+def main():
+    print("Zygalski Sheets Simulation - Choose Mode:")
+    print("1. Simplified Educational Version")
+    print("2. Historically Accurate Version")
+    choice = input("Enter 1 or 2: ").strip()
+    
+    if choice == '1':
+        demo_educational()
+    elif choice == '2':
+        demo_historical()
+    else:
+        print("Invalid choice. Exiting.")
+
+if __name__ == "__main__":
+    main()
